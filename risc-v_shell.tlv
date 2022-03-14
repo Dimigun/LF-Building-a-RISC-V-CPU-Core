@@ -44,15 +44,61 @@
    $reset = *reset;
    
    
-   // YOUR CODE HERE
-   // ...
+   $pc[31:0] = >>1$next_pc;
+   
+   $next_pc[31:0] = $reset?'0:$pc + 32'd4;
+   
+   `READONLY_MEM($pc, $$instr[31:0])
+   $is_u_instr = $instr[6:2] ==? 5'b0x101;
+   $is_i_instr = $instr[6:2] ==? 5'b0000x ||
+   $instr[6:2] ==? 5'b001x0 ||
+   $instr[6:2] ==? 5'b11001;
+   $is_r_instr = $instr[6:2] ==? 5'b01011 ||
+   $instr[6:2] ==? 5'b011x0 ||
+   $instr[6:2] ==? 5'b10100;
+   $is_s_instr = $instr[6:2] ==? 5'b0100x;
+   $is_b_instr = $instr[6:2] ==? 5'b11000;
+   $is_j_instr = $instr[6:2] ==? 5'b11011;   
+   
+   $funct3[2:0] = $instr[14:12];
+   $rs1[4:0] = $instr[19:15];
+   $rs2[4:0] = $instr[24:20];
+   $rd[4:0] = $instr[11:7];
+   $opcode[6:0] = $instr[6:0];
+   
+   $rs2_valid = $is_r_instr || $is_s_instr || $is_b_instr;
+   $rs1_valid = $is_r_instr || $is_s_instr || $is_b_instr || $inst_i_instr;
+   $rd_valid = $is_r_instr || $is_i_instr || $is_u_instr || $is_j_instr;
+   $imm_valid = $is_i_instr || $is_s_instr || $is_b_instr || $is_u_instr || $is_j_instr;
+   
+   `BOGUS_USE($rd $rd_valid $rs1 $rs1_valid $rs2 $rs2_valid);
+   
+   
+   $imm[31:0] = $is_i_instr ? {{21{$instr[31]}}, $instr[30:20]} :
+                $is_s_instr ? {{21{$instr[31]}}, $instr[30:25], $instr[11:7]} :
+                $is_b_instr ? {{20{$instr[31]}}, $instr[7], $instr[30:25], $instr[11:8], 1'b0} :
+                $is_u_instr ? {$instr[31:12], 12'b0} :
+                $is_j_instr ? {{12{$instr[31]}}, $instr[19:12], $instr[20], $instr[30:21], 1'b0} :
+                32'b0 ;
+   
+   $dec_bits[10:0] = {$instr[30],$funct3,$opcode};
+   $is_beq = $dec_bits ==? 11'bx_000_1100011;
+   $is_bne = $dec_bits ==? 11'bx_001_1100011;
+   $is_blt = $dec_bits ==? 11'bx_100_1100011;
+   $is_bge = $dec_bits ==? 11'bx_101_1100011;
+   $is_bltu = $dec_bits ==? 11'bx_110_1100011;
+   $is_bgeu = $dec_bits ==? 11'bx_111_1100011;
+   $is_addi = $dec_bits ==? 11'bx_000_0010011;
+   $is_add = $dec_bits ==? 11'bx_000_0110011;
+
+   `BOGUS_USE($imm $imm_valid $is_add $is_addi $is_beq $is_bge $is_bgeu $is_blt $is_bltu $is_bne)
    
    
    // Assert these to end simulation (before Makerchip cycle limit).
    *passed = 1'b0;
    *failed = *cyc_cnt > M4_MAX_CYC;
    
-   //m4+rf(32, 32, $reset, $wr_en, $wr_index[4:0], $wr_data[31:0], $rd1_en, $rd1_index[4:0], $rd1_data, $rd2_en, $rd2_index[4:0], $rd2_data)
+   m4+rf(32, 32, $opcode, $rd, $rs2, $rs1, $funct3, $src1_value, $src2_value, $reset, $rs2_valid, $rs1_valid, $rd_valid, $imm_valid, $imm, $is_beq, $is_bne, $is_blt, $is_bge, $is_bltu, $is_bgeu, $is_addi, $is_add)
    //m4+dmem(32, 32, $reset, $addr[4:0], $wr_en, $wr_data[31:0], $rd_en, $rd_data)
    m4+cpu_viz()
 \SV
