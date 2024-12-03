@@ -145,15 +145,16 @@ m4+definitions(['
       \viz_js
          box: {width: 120, height: 18, strokeWidth: 0},
          render() {
-            siggen = (name) => this.svSigRef(`${name}`) == null ? this.svSigRef(`sticky_zero`) : this.svSigRef(`${name}`);
-            
+            let siggen = (name) => {
+               let sig = this.svSigRef(`${name}`)
+               return (sig == null || !sig.exists()) ? this.svSigRef(`sticky_zero`) : sig;
+            }
             let rf_rd_en1 = siggen(`L0_rf1_rd_en1_a0`)
             let rf_rd_index1 = siggen(`L0_rf1_rd_index1_a0`)
             let rf_rd_en2 = siggen(`L0_rf1_rd_en2_a0`)
             let rf_rd_index2 = siggen(`L0_rf1_rd_index2_a0`)
-            let rf_wr_index = siggen(`rf1_wr_index_a0`)
             let wr = siggen(`L1_Xreg[${this.getIndex()}].L1_wr_a0`)
-            let value = siggen(`Xreg_value_a0(${this.getIndex()})`)
+            let value = siggen(`Xreg_value_a0[${this.getIndex()}]`)
             
             let rd = (rf_rd_en1.asBool(false) && rf_rd_index1.asInt() == this.getIndex()) || 
                      (rf_rd_en2.asBool(false) && rf_rd_index2.asInt() == this.getIndex())
@@ -201,13 +202,16 @@ m4+definitions(['
       \viz_js
          box: {width: 120, height: 18, strokeWidth: 0},
          render() {
-            siggen = (name) => this.svSigRef(`${name}`) == null ? this.svSigRef(`sticky_zero`) : this.svSigRef(`${name}`);
+            let siggen = (name) => {
+               let sig = this.svSigRef(`${name}`)
+               return (sig == null || !sig.exists()) ? this.svSigRef(`sticky_zero`) : sig;
+            }
             //
             let dmem_rd_en = siggen(`L0_dmem1_rd_en_a0`);
             let dmem_addr = siggen(`L0_dmem1_addr_a0`);
             //
             let wr = siggen(`L1_Dmem[${this.getIndex()}].L1_wr_a0`);
-            let value = siggen(`Dmem_value_a0(${this.getIndex()})`);
+            let value = siggen(`Dmem_value_a0[${this.getIndex()}]`);
             //
             let rd = dmem_rd_en.asBool() && dmem_addr.asInt() == this.getIndex();
             let mod = wr.asBool(false);
@@ -372,9 +376,9 @@ m4+definitions(['
          var missing_cnt = 0
          let sticky_zero = this.svSigRef(`sticky_zero`);  // A default zero-valued signal.
          // Attempt to look up a signal, using sticky_zero as default and updating missing_list if expected.
-         siggen = (name, full_name, expected = true) => {
+         let siggen = (name, full_name, expected = true) => {
             var sig = this.svSigRef(full_name ? full_name : `L0_${name}_a0`)
-            if (sig == null) {
+            if (sig == null || !sig.exists()) {
                sig         = sticky_zero;
                if (expected) {
                   missing_list[missing_cnt > 11 ? 1 : 0] += `◾ $${name}      \n`;
@@ -393,7 +397,7 @@ m4+definitions(['
             let instrs = ["lui", "auipc", "jal", "jalr", "beq", "bne", "blt", "bge", "bltu", "bgeu", "lb", "lh", "lw", "lbu", "lhu", "sb", "sh", "sw", "addi", "slti", "sltiu", "xori", "ori", "andi", "slli", "srli", "srai", "add", "sub", "sll", "slt", "sltu", "xor", "srl", "sra", "or", "and", "csrrw", "csrrs", "csrrc", "csrrwi", "csrrsi", "csrrci", "load", "s_instr"];
             for(i=0;i<instrs.length;i++) {
                var sig = this.svSigRef(`L0_is_${instrs[i]}_a0`)
-               if(sig != null && sig.asBool()) {
+               if(sig != null && sig.asBool(false)) {
                   return instrs[i].toUpperCase()
                }
             }
@@ -534,7 +538,7 @@ m4+definitions(['
          
          // Animate fetch (and provide onChange behavior for other animation).
          
-         let fetch_instr_str = siggen(`instr_strs(${pc.asInt() >> 2})`, `instr_strs(${pc.asInt() >> 2})`).asString("(?) UNKNOWN fetch instr").substr(4)
+         let fetch_instr_str = siggen(`instr_strs[${pc.asInt() >> 2}]`, `instr_strs[${pc.asInt() >> 2}]`).asString("(?) UNKNOWN fetch instr").substr(4)
          let fetch_instr_viz = new fabric.Text(fetch_instr_str, {
             top: M4_IMEM_TOP + 18 * (pc.asInt() >> 2),
             left: -352 + 8 * 4,
@@ -695,12 +699,20 @@ m4+definitions(['
            return {binary, disassembled}
          },
          onTraceData() {
-            let instr = this.svSigRef(`instrs(${this.getIndex()})`)
+            let instr = this.svSigRef(`instrs[${this.getIndex()}]`)
+            if (!instr) {
+               // Previously, Verilator used (), not []. This should no longer be needed, but, just in case:
+               instr = this.svSigRef(`instrs(${this.getIndex()})`)
+            }
             if (instr) {
                let binary_str = instr.goToSimStart().asBinaryStr("")
                this.getObjects().binary.set({text: binary_str})
             }
-            let disassembled = this.svSigRef(`instr_strs(${this.getIndex()})`)
+            let disassembled = this.svSigRef(`instr_strs[${this.getIndex()}]`)
+            if (!disassembled) {
+               // Previously, Verilator used (), not []. This should no longer be needed, but, just in case:
+               disassembled = this.svSigRef(`instr_strs(${this.getIndex()})`)
+            }
             if (disassembled) {
                let disassembled_str = disassembled.goToSimStart().asString("")
                disassembled_str = disassembled_str.slice(0, -5)
